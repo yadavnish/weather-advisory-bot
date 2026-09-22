@@ -10,6 +10,7 @@ honest_fallback node instead of silently returning stale/fake data.
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import asyncio
 
 import httpx
 
@@ -72,12 +73,23 @@ async def fetch_weather(latitude: float, longitude: float, location_name: str) -
     }
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
-            resp = await client.get(FORECAST_URL, params=params)
-            resp.raise_for_status()
-            data = resp.json()
+            for attempt in range(3):
+                resp = await client.get(FORECAST_URL, params=params)
+
+                if resp.status_code == 429:
+                    if attempt == 2:
+                        resp.raise_for_status()
+
+                    await asyncio.sleep(2 * (attempt + 1))
+                    continue
+
+                resp.raise_for_status()
+                data = resp.json()
+                break
+
     except (httpx.HTTPError, ValueError) as e:
         raise WeatherFetchError(f"weather request failed: {e}") from e
-
+    
     try:
         current = data["current"]
         daily = data["daily"]
