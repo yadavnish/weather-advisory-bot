@@ -134,8 +134,8 @@ async def classify(
         )
 
     except Exception as e:
-        return SemanticResult(
             print(f"SEMANTIC CLASSIFIER ERROR: {type(e).__name__}: {e}", flush=True)
+            return SemanticResult(
             applies=False,
             confidence=0.0,
             summary="",
