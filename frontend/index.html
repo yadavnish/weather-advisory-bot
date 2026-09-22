@@ -195,7 +195,7 @@
   </main>
 
   <script>
-    const API_BASE = "https://weather-advisory-bot-cep8.onrender.com";
+    const API_BASE = "https://trustworthy-motivation-production-d076.up.railway.app";
     const sessionId = "web-" + Math.random().toString(36).slice(2);
     const log = document.getElementById("log");
     const form = document.getElementById("form");
@@ -249,7 +249,7 @@
         const res = await fetch(`${API_BASE}/ask`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ session_id: sessionId, question, location_hint: extractLocation(question) }),
+          body: JSON.stringify({ session_id: sessionId, question, location_hint: extractLocation(question) || "Bangalore" }),
         });
         const data = await res.json();
         addMsg(data.answer, "bot");
