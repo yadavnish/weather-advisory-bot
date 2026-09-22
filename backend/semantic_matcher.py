@@ -39,8 +39,12 @@ Rules:
 
 Examples:
 - "Is today good for a picnic?" matches a picnic/outdoor-gathering policy.
+- "Is today suitable for a picnic in Bangalore?" matches a picnic/outdoor-gathering policy.
 - "Would today be suitable for spending the day outside?" can match the
   same policy.
+- "Should I have a picnic today?" matches a picnic/outdoor-gathering policy.
+- "Is this a good day for an outdoor gathering?" matches a
+  picnic/outdoor-gathering policy.
 - "Can I go cycling?" should match a cycling policy, not a picnic policy.
 
 Return ONLY valid JSON:
