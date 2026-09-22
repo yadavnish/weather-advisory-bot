@@ -1,0 +1,216 @@
+# Standard Operating Procedures for the Weather-Advisory bot.
+#
+# match_type:
+#   threshold          -> resolved by pure code against the weather snapshot
+#                          and simple keyword checks on the question.
+#   semantic           -> resolved by an LLM classifier call (fuzzy scenarios
+#                          with no clean numeric threshold).
+#   systemic_override  -> checked first, before category matching; if it
+#                          fires it is prepended to whatever else matched.
+#
+# severity: 1 (informational) .. 5 (override / danger)
+#
+# advice_template uses {field_name} placeholders that are filled ONLY from
+# the actual WeatherSnapshot object for that request — never from the model.
+
+- id: SOP-001
+  category: outdoor_exercise
+  match_type: threshold
+  severity: 3
+  conditions:
+    - field: uv_index
+      op: ">="
+      value: 8
+    - hour_between: ["11:00", "16:00"]
+  keywords_any: [run, jog, exercise, cycle, cycling, bike, hike, walk, outdoor, sport, sports]
+  advice_template: >
+    UV index is {uv_index} right now, at or above the level 8 threshold for
+    the 11am-4pm window. Advise against unprotected outdoor exercise during
+    this window - use sunscreen and reschedule to early morning or evening
+    if possible.
+
+- id: SOP-002
+  category: outdoor_exercise
+  match_type: threshold
+  severity: 4
+  conditions:
+    - field: wind_speed_10m
+      op: ">"
+      value: 40
+  keywords_any: [cycle, cycling, bike, biking, two-wheeler, scooter, motorbike]
+  advice_template: >
+    Wind speed is {wind_speed_10m} km/h, above the 40 km/h safety threshold
+    for two-wheelers. This is a safety risk, not just discomfort - consider
+    postponing the ride or choosing a sheltered route.
+
+- id: SOP-003
+  category: travel
+  match_type: threshold
+  severity: 3
+  conditions:
+    - field: precipitation_probability
+      op: ">="
+      value: 70
+  keywords_any: [travel, trip, drive, driving, commute, flight, journey, road]
+  advice_template: >
+    Precipitation probability is {precipitation_probability}%, at or above
+    the 70% threshold. Expect possible delays - check for local alerts
+    before departure.
+
+- id: SOP-004
+  category: travel
+  match_type: threshold
+  severity: 2
+  conditions:
+    - field: wind_gusts_10m
+      op: ">="
+      value: 40
+  keywords_any: [travel, trip, drive, driving, commute, flight, journey, road]
+  advice_template: >
+    Wind gusts up to {wind_gusts_10m} km/h are expected. Not severe on their
+    own, but worth factoring into travel plans, especially for two-wheelers
+    or high-sided vehicles.
+
+- id: SOP-005
+  category: vulnerable_groups
+  match_type: threshold
+  severity: 3
+  conditions:
+    - field: temperature_2m
+      op: ">="
+      value: 38
+  keywords_any: [elderly, senior, grandparent, child, kid, kids, baby, infant, toddler, pet, dog, walk the dog]
+  advice_template: >
+    Temperature is {temperature_2m}C, at or above the 38C heat-risk
+    threshold for vulnerable groups. Avoid extended outdoor time for young
+    children, elderly people, or pets during peak hours; hydrate and seek
+    shade.
+
+- id: SOP-006
+  category: vulnerable_groups
+  match_type: threshold
+  severity: 2
+  conditions:
+    - field: temperature_2m
+      op: "<="
+      value: 5
+  keywords_any: [elderly, senior, grandparent, child, kid, kids, baby, infant, toddler]
+  advice_template: >
+    Temperature is {temperature_2m}C, at or below the 5C cold-risk
+    threshold for vulnerable groups. Limit outdoor exposure time and dress
+    in warm layers, especially for infants and elderly family members.
+
+- id: SOP-007
+  category: outdoor_exercise
+  match_type: threshold
+  severity: 2
+  conditions:
+    - field: precipitation
+      op: ">"
+      value: 0.5
+  keywords_any: [run, jog, exercise, cycle, cycling, bike, hike, walk, outdoor, sport, sports]
+  advice_template: >
+    Current precipitation is {precipitation}mm - light but active rain.
+    Minor caution advised; consider rescheduling by a few hours rather than
+    cancelling outright.
+
+- id: SOP-008
+  category: vulnerable_groups
+  match_type: threshold
+  severity: 4
+  conditions:
+    - field: uv_index
+      op: ">="
+      value: 9
+  keywords_any: [pet, dog, cat, paw, paws]
+  advice_template: >
+    UV index is {uv_index} and surface temperatures will be high enough to
+    burn paw pads on pavement and asphalt. Avoid walking pets on hot
+    pavement during this window; stick to grass or shaded routes, or wait
+    until evening.
+
+- id: SOP-009
+  category: general
+  match_type: semantic
+  severity: 2
+  description: >
+    The user is asking something like "is today good for a picnic / outdoor
+    gathering / spending the day outside" - a holistic comfort judgment that
+    doesn't reduce to a single numeric threshold. Consider temperature,
+    wind, precipitation, and UV together, in the round, the way a person
+    deciding whether to pack a picnic basket would.
+  advice_template: >
+    Taking temperature, wind, precipitation, and UV together: {llm_summary}
+
+- id: SOP-010
+  id_note: systemic override - IMD-grade rainfall/wind categories
+  category: systemic
+  match_type: systemic_override
+  severity: 5
+  conditions:
+    - field: precipitation_sum
+      op: ">="
+      value: 64.5
+    - op: OR
+    - field: wind_gusts_10m
+      op: ">="
+      value: 62
+  advice_template: >
+    A significant weather system is affecting this location: {rain_wind_summary}.
+    This overrides normal category-specific guidance - treat every outdoor
+    activity question (exercise, travel, or otherwise) as high severity
+    right now, regardless of what category it falls under.
+
+- id: SOP-011
+  category: travel
+  match_type: threshold
+  severity: 1
+  conditions:
+    - field: precipitation_probability
+      op: "<"
+      value: 20
+    - field: wind_speed_10m
+      op: "<"
+      value: 20
+    - field: uv_index
+      op: "<"
+      value: 6
+  keywords_any: [travel, trip, drive, driving, commute, flight, journey, road, good day, fine, okay to]
+  advice_template: >
+    Conditions look calm: {precipitation_probability}% precipitation chance,
+    {wind_speed_10m} km/h wind, UV index {uv_index}. No advisory-level
+    concerns for travel right now.
+
+- id: SOP-012
+  category: outdoor_exercise
+  match_type: semantic
+  severity: 3
+  description: >
+    The user is asking about a sustained, effort-intensive outdoor activity
+    like a long run, marathon training, or an all-day hike - something where
+    heat buildup, hydration, and cumulative UV exposure over hours matter
+    more than any single instantaneous reading. This needs a holistic read
+    across temperature, UV, and humidity/precipitation together, not one
+    threshold in isolation.
+  advice_template: >
+    For sustained effort over several hours: {llm_summary}
+- id: SOP-013
+  category: outdoor_exercise
+  match_type: threshold
+  severity: 1
+  conditions:
+    - field: wind_speed_10m
+      op: "<="
+      value: 40
+    - field: precipitation
+      op: "<="
+      value: 0.5
+    - field: precipitation_probability
+      op: "<"
+      value: 70
+  keywords_any: [cycle, cycling, bike, biking]
+  advice_template: >
+    Current cycling conditions are within the normal advisory limits:
+    wind is {wind_speed_10m} km/h, precipitation is {precipitation} mm,
+    and precipitation probability is {precipitation_probability}%.
+    No cycling-specific weather advisory is triggered by this SOP right now.
