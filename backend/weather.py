@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 import asyncio
+import time
 
 import httpx
 
@@ -18,42 +19,28 @@ from .models import WeatherSnapshot
 
 GEOCODE_URL = "https://geocoding-api.open-meteo.com/v1/search"
 FORECAST_URL = "https://api.open-meteo.com/v1/forecast"
+_weather_cache: dict[tuple[float, float], tuple[float, WeatherSnapshot]] = {}
+CACHE_TTL_SECONDS = 300
 
 
 class WeatherFetchError(Exception):
     pass
 
 
-async def geocode(place_name: str) -> tuple[float, float, str]:
-    normalized = place_name.strip().lower()
+async def fetch_weather(
+    latitude: float,
+    longitude: float,
+    location_name: str,
+) -> WeatherSnapshot:
 
-    # Open-Meteo can resolve "Bangalore" to Bangalore Town, Pakistan.
-    # Use the well-known Bengaluru coordinates when the user explicitly
-    # asks for Bangalore/Bengaluru.
-    if normalized in {"bangalore", "bengaluru"}:
-        return 12.9716, 77.5946, "Bengaluru, Karnataka, India"
+    cache_key = (round(latitude, 4), round(longitude, 4))
+    cached = _weather_cache.get(cache_key)
 
-    params = {"name": place_name, "count": 10, "language": "en", "format": "json"}
-    try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            resp = await client.get(GEOCODE_URL, params=params)
-            resp.raise_for_status()
-            data = resp.json()
-    except (httpx.HTTPError, ValueError) as e:
-        raise WeatherFetchError(f"geocoding request failed: {e}") from e
+    if cached:
+        cached_at, cached_snapshot = cached
+        if time.time() - cached_at < CACHE_TTL_SECONDS:
+            return cached_snapshot
 
-    results = data.get("results") or []
-    if not results:
-        raise WeatherFetchError(f"no location found for '{place_name}'")
-
-    top = results[0]
-    resolved_name = ", ".join(
-        part for part in [top.get("name"), top.get("admin1"), top.get("country")] if part
-    )
-    return top["latitude"], top["longitude"], resolved_name
-
-
-async def fetch_weather(latitude: float, longitude: float, location_name: str) -> WeatherSnapshot:
     params = {
         "latitude": latitude,
         "longitude": longitude,
@@ -67,20 +54,33 @@ async def fetch_weather(latitude: float, longitude: float, location_name: str) -
                 "uv_index",
             ]
         ),
-        "daily": ",".join(["precipitation_sum", "precipitation_probability_max"]),
+        "daily": ",".join(
+            [
+                "precipitation_sum",
+                "precipitation_probability_max",
+            ]
+        ),
         "timezone": "auto",
         "forecast_days": 1,
     }
+
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
             for attempt in range(3):
                 resp = await client.get(FORECAST_URL, params=params)
 
                 if resp.status_code == 429:
+                    retry_after = resp.headers.get("Retry-After")
+
                     if attempt == 2:
                         resp.raise_for_status()
 
-                    await asyncio.sleep(2 * (attempt + 1))
+                    try:
+                        delay = float(retry_after) if retry_after else 5.0
+                    except ValueError:
+                        delay = 5.0
+
+                    await asyncio.sleep(min(delay, 15.0))
                     continue
 
                 resp.raise_for_status()
@@ -89,11 +89,12 @@ async def fetch_weather(latitude: float, longitude: float, location_name: str) -
 
     except (httpx.HTTPError, ValueError) as e:
         raise WeatherFetchError(f"weather request failed: {e}") from e
-    
+
     try:
         current = data["current"]
         daily = data["daily"]
-        return WeatherSnapshot(
+
+        snapshot = WeatherSnapshot(
             location_name=location_name,
             latitude=latitude,
             longitude=longitude,
@@ -107,5 +108,12 @@ async def fetch_weather(latitude: float, longitude: float, location_name: str) -
             uv_index=current.get("uv_index", 0.0),
             humidity=current["relative_humidity_2m"],
         )
+
+        _weather_cache[cache_key] = (time.time(), snapshot)
+
+        return snapshot
+
     except (KeyError, IndexError) as e:
-        raise WeatherFetchError(f"unexpected Open-Meteo response shape: {e}") from e
+        raise WeatherFetchError(
+            f"unexpected Open-Meteo response shape: {e}"
+        ) from e
