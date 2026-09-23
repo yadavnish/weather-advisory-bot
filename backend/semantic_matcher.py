@@ -75,7 +75,7 @@ def _deterministic_picnic_fallback(
     if sop.id != "SOP-009":
         return None
 
-        picnic_terms = [
+    picnic_terms = [
         "picnic",
         "outdoor gathering",
         "spend the day outside",
