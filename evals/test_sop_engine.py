@@ -37,7 +37,7 @@ def make_snapshot(**overrides) -> WeatherSnapshot:
 
 def test_load_sops():
     sops = sop_engine.load_sops(SOPS_PATH)
-    assert len(sops) == 13
+    assert len(sops) == 14
     ids = {s.id for s in sops}
     assert "SOP-010" in ids
     assert all(s.advice_template for s in sops)
