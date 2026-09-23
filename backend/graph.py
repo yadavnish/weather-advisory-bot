@@ -205,7 +205,16 @@ async def match_semantic_sops(state: GraphState) -> GraphState:
             )
         )
 
-    if errors and not matches:
+     # A semantic-classification failure should only escalate to a
+    # visible error if there is truly nothing else to answer with.
+    # If a threshold SOP or the systemic override already matched,
+    # that real, grounded answer must not be discarded just because
+    # an unrelated semantic SOP couldn't be checked.
+    has_other_signal = bool(state.get("threshold_matches")) or bool(
+        state.get("override_match")
+    )
+
+    if errors and not matches and not has_other_signal:
         return {
             **state,
             "error": (
