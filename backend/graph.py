@@ -164,6 +164,7 @@ async def match_semantic_sops(state: GraphState) -> GraphState:
     ]
 
     matches: list[SOPMatch] = []
+    errors: list[str] = []
 
     for sop in semantic_sops:
         result = await classify(
@@ -178,14 +179,15 @@ async def match_semantic_sops(state: GraphState) -> GraphState:
         #
         # For example, Gemini quota exhaustion should not cause
         # the system to incorrectly report "no policy match".
+        #
+        # We no longer bail out on the first failure: one semantic SOP
+        # may have a deterministic fallback (e.g. picnic) that succeeds
+        # even while another semantic SOP has no fallback and fails. We
+        # only report "unavailable" for the whole batch if nothing
+        # could be resolved at all.
         if result.raw_error:
-            return {
-                **state,
-                "error": (
-                    "semantic_model_unavailable: "
-                    f"{result.raw_error}"
-                ),
-            }
+            errors.append(f"{sop.id}: {result.raw_error}")
+            continue
 
         matches.append(
             SOPMatch(
@@ -202,6 +204,15 @@ async def match_semantic_sops(state: GraphState) -> GraphState:
                 confidence=result.confidence,
             )
         )
+
+    if errors and not matches:
+        return {
+            **state,
+            "error": (
+                "semantic_model_unavailable: "
+                + "; ".join(errors)
+            ),
+        }
 
     return {
         **state,
