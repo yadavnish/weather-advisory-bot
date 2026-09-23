@@ -15,6 +15,7 @@ from pathlib import Path
 from dataclasses import asdict
 
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
@@ -97,3 +98,7 @@ async def list_sops() -> list[dict]:
 @app.get("/health")
 async def health() -> dict:
     return {"status": "ok", "sops_loaded": len(_sops)}
+
+
+FRONTEND_DIR = Path(__file__).resolve().parent.parent / "frontend"
+app.mount("/", StaticFiles(directory=FRONTEND_DIR, html=True), name="frontend")
