@@ -67,6 +67,73 @@ class SemanticResult:
     raw_error: str | None = None
 
 
+def _deterministic_picnic_fallback(
+    question: str,
+    sop: SOP,
+    snapshot: WeatherSnapshot,
+) -> SemanticResult | None:
+    if sop.id != "SOP-009":
+        return None
+
+    picnic_terms = [
+        "picnic",
+        "outdoor gathering",
+        "spend the day outside",
+        "spending the day outside",
+        "outdoors today",
+        "outside today",
+    ]
+    if not any(term in question.lower() for term in picnic_terms):
+        return None
+
+    precip_prob = snapshot.precipitation_probability
+    precip_sum = snapshot.precipitation_sum
+    wind_gusts = snapshot.wind_gusts_10m
+    humidity = snapshot.humidity
+    uv = snapshot.uv_index
+
+    concerns = []
+    verdict = "look good"
+
+    if precip_prob is not None and precip_prob >= 60:
+        verdict = "risky"
+        concerns.append(f"a {precip_prob}% chance of rain")
+    if precip_sum is not None and precip_sum > 0.5:
+        verdict = "risky"
+        concerns.append(f"expected rainfall of {precip_sum}mm")
+    if wind_gusts is not None and wind_gusts > 30:
+        if verdict == "look good":
+            verdict = "a bit uncertain"
+        concerns.append(f"gusty wind up to {wind_gusts} km/h")
+    if humidity is not None and humidity > 85:
+        if verdict == "look good":
+            verdict = "a bit uncertain"
+        concerns.append(f"high humidity at {humidity}%")
+    if uv is not None and uv > 8:
+        if verdict == "look good":
+            verdict = "a bit uncertain"
+        concerns.append(f"a high UV index of {uv}")
+
+    if concerns:
+        summary = (
+            f"Conditions {verdict} for a picnic today, mainly due to "
+            + ", ".join(concerns)
+            + " (deterministic fallback estimate, semantic model unavailable)."
+        )
+    else:
+        summary = (
+            "Conditions look favorable for a picnic today - comfortable "
+            "temperature, low rain risk, and manageable wind and humidity "
+            "(deterministic fallback estimate, semantic model unavailable)."
+        )
+
+    return SemanticResult(
+        applies=True,
+        confidence=0.6,
+        summary=summary,
+        raw_error=None,
+    )
+
 async def classify(
     question: str,
     sop: SOP,
@@ -119,7 +186,6 @@ async def classify(
 
         text = response.text.strip()
 
-        # Remove markdown fences if Gemini happens to return them.
         if text.startswith("```"):
             text = text.replace("```json", "", 1)
             text = text.replace("```", "")
@@ -135,6 +201,9 @@ async def classify(
 
     except Exception as e:
         print(f"SEMANTIC CLASSIFIER ERROR: {e}")
+        fallback = _deterministic_picnic_fallback(question, sop, snapshot)
+        if fallback is not None:
+            return fallback
         return SemanticResult(
             applies=False,
             confidence=0.0,
