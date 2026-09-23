@@ -214,3 +214,21 @@
     wind is {wind_speed_10m} km/h, precipitation is {precipitation} mm,
     and precipitation probability is {precipitation_probability}%.
     No cycling-specific weather advisory is triggered by this SOP right now.
+
+- id: SOP-014
+  category: outdoor_exercise
+  match_type: threshold
+  severity: 2
+  conditions:
+    - field: wind_speed_10m
+      op: "<="
+      value: 40
+    - field: precipitation_probability
+      op: ">="
+      value: 70
+  keywords_any: [cycle, cycling, bike, biking]
+  advice_template: >
+    Wind is within safe limits at {wind_speed_10m} km/h, but precipitation
+    probability is {precipitation_probability}% - a moderate chance of rain
+    during your ride. Not a safety-critical threshold, but worth checking
+    conditions before heading out or carrying rain gear.
