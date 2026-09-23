@@ -134,9 +134,10 @@ async def classify(
         )
 
     except Exception as e:
-            return SemanticResult(
+        print(f"SEMANTIC CLASSIFIER ERROR: {e}")
+        return SemanticResult(
             applies=False,
             confidence=0.0,
             summary="",
-            raw_error=str(e),
+            raw_error="gemini_unavailable",
         )
